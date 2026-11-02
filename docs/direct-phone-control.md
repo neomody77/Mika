@@ -76,3 +76,16 @@ mika --device SERIAL --package com.wangzan101.mika.dev phone close SESSION --jso
 JAVA_HOME=/path/to/jdk17 ./gradlew :core:test :core:cliTest :app:testDebugUnitTest
 python3 -m unittest discover -s tools/mika/tests -p 'test_*.py'
 ```
+
+## 专用模拟器回归
+
+先在专用 Android 14+、英文环境的模拟器安装 Mika Dev，打开一次等待初始化完成，按安装指南启用无障碍等权限，再执行 connect。不配置手机模型。模拟器序列号须显式传入；测试脚本拒绝物理设备。
+
+```sh
+python3 tools/mika/scripts/mika_cli.py --device emulator-5596 --package com.wangzan101.mika.dev connect --json
+python3 tools/mika/tests/emulator_direct_smoke.py --device emulator-5596 --output /tmp/mika-emulator-run-1 --check-idle
+```
+
+测试使用系统设置及 Mika 自带的自检页；仅测试页的准备通过 ADB 启动，读屏、截图、点击、输入和滚动均走实际 MCP/CLI。按按钮后的计数、输入回读、滚动前后的行内容和两帧 PNG 的变化分别核对执行结果。还检查主屏任务、连接撤销、虚拟屏和活动唤醒锁的释放。
+
+check-idle 选项会真实等待 5 分钟的空闲期限，期间只用 ADB 观察显示屏，不轮询手机工具续租。输出目录须为新目录；其中保存 report.json、progress.json 和测试页 PNG。结果只代表选定模拟器，不替代厂商真机验证。
