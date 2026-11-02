@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mika-phone-cli"
-version = "0.1.0"
-description = "Command-line client for Mika's Android task API"
+version = "0.2.0"
+description = "Command-line client for Mika's Android tasks and direct background phone control"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
 dependencies = []

@@ -1,9 +1,11 @@
-<!-- translated-from: README.md @ 960f4051ce73 -->
+<!-- translated-from: README.md @ bdfa7cc599b6 -->
 <div align="center">
 
 <img src="../media/logo.png" alt="Mika" width="88" />
 
 # Mika
+
+> 本 Fork 支持电脑通过 MCP 和 CLI 主控手机，手机保留后台虚拟屏，无需配置模型。见[直接控制指南](../direct-phone-control.md)。下文的原有任务委托模式仍可使用。
 
 **你手机上的 AI 助理：说一句话，它替你操作 App、上网，把事办成。**
 

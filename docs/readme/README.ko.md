@@ -1,9 +1,11 @@
-<!-- translated-from: README.md @ 960f4051ce73 -->
+<!-- translated-from: README.md @ bdfa7cc599b6 -->
 <div align="center">
 
 <img src="../media/logo.png" alt="Mika" width="88" />
 
 # Mika
+
+> 이 포크는 MCP와 CLI를 통한 컴퓨터의 직접 제어를 지원합니다. 휴대폰의 백그라운드 가상 화면을 유지하며 휴대폰에 모델을 설정할 필요가 없습니다. [직접 제어 안내](../direct-phone-control.md)를 참고하세요. 기존 작업 위임 모드도 계속 사용할 수 있습니다.
 
 **휴대폰 속 AI 비서: 한마디만 하면 앱과 웹을 대신 조작해서 일을 끝내 줍니다.**
 

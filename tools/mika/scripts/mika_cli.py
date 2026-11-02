@@ -2,6 +2,8 @@
 """Mika's task API client. Standard library only; usable outside the source tree."""
 
 import argparse
+import base64
+import binascii
 import contextlib
 import http.client
 import json
@@ -16,7 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 API = "/api/v1"
 PHONE_FILES = "/sdcard/Android/data/com.wangzan101.mika/files"
 INFO_FILE = PHONE_FILES + "/mcp-usb.json"
@@ -115,7 +117,7 @@ class Client:
     def unknown(task_id=None):
         details = {"task_id": task_id} if task_id else {}
         raise CliError("outcome_unknown", "The phone may have accepted the operation, but its response was not received. "
-                       "It was not retried. Check task status or task list before submitting again.", 4, **details)
+                       "It was not retried. Check task status or task list; for direct phone input, read the current screen before deciding what to do next.", 4, **details)
 
     def discover(self):
         try:
@@ -254,19 +256,23 @@ def connection(args, secrets):
     if args.token_file:
         raise CliError("arguments", "--token-file requires --url; ADB reads the current token from the phone.")
     adb = Adb(args.adb, args.device or os.environ.get("ANDROID_SERIAL"))
+    package = getattr(args, "package", "com.wangzan101.mika")
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+", package):
+        raise CliError("arguments", "--package must be an Android application ID.")
+    phone_files = "/sdcard/Android/data/" + package + "/files"
     progress(args, "starting ADB server...")
     adb.start_server()
     adb.select()
     if args.command == "connect":
         progress(args, "running phone bootstrap...")
         try:
-            adb.run("shell", "sh", CONNECT_SCRIPT, timeout=60)
+            adb.run("shell", "sh", phone_files + "/connect-computer.sh", timeout=60)
         except CliError as exc:
             if exc.code != "adb":
                 raise
             raise CliError("adb", "Mika's phone bootstrap did not complete. " + RETRY_HINT) from None
     try:
-        info = json.loads(adb.run("shell", "cat", INFO_FILE))
+        info = json.loads(adb.run("shell", "cat", phone_files + "/mcp-usb.json"))
         if not isinstance(info, dict):
             raise ValueError()
     except ValueError:
@@ -340,6 +346,10 @@ def execute(args, secrets):
             args.text = text_input(args.text, args.text_file, args.action)
         if hasattr(args, "task_id") and not re.fullmatch(r"[A-Za-z0-9_-]+", args.task_id):
             raise CliError("arguments", "task_id must be an ID returned by Mika.")
+    if args.command == "phone" and args.action == "input":
+        args.text = text_input(args.text, args.text_file, "input")
+    if args.command == "phone" and args.action == "screenshot" and Path(args.output).exists():
+        raise CliError("output_exists", "Screenshot output already exists; choose another --output path.")
     if args.command == "devices":
         if args.url or args.token_file:
             raise CliError("arguments", "devices lists ADB devices; it does not use --url or --token-file.")
@@ -355,6 +365,10 @@ def execute(args, secrets):
         if args.command == "doctor":
             device = client.request("GET", "/device") if "device_state" in info.get("capabilities", []) else {"status": "unsupported"}
             return {"connection": "ok", **transport, "api_version": 1, "device_state": device, "model_configuration": "unverified"}
+        if args.command == "phone":
+            if "phone_control" not in info.get("capabilities", []):
+                raise CliError("incompatible_api", "This connection does not provide direct phone control. Use the fork's APK over ADB or a private network.")
+            return phone_command(client, args)
         action = args.action
         if action == "steer" and "task_steer" not in info.get("capabilities", []):
             raise CliError("incompatible_api", "This Mika APK does not support task steering; update the phone app.")
@@ -382,6 +396,41 @@ def execute(args, secrets):
                                   not isinstance(result.get("message_id"), str) or not result["message_id"]):
             client.unknown(args.task_id)
         return result
+
+
+def phone_command(client, args):
+    names = {"apps": "list_apps", "launch": "open_app", "read": "read_screen", "input": "input_text"}
+    name = names.get(args.action, args.action)
+    body = {}
+    for key in ["session_id", "snapshot_id", "ref", "x", "y", "text", "query", "package_name", "direction", "max_elements"]:
+        value = getattr(args, key, None)
+        if value is not None:
+            body[key] = value
+    mutation = name not in {"list_apps", "read_screen", "screenshot"}
+    result = client.request("POST", "/phone/" + name, body, mutation=mutation, timeout=max(client.timeout, 35))
+    if result.get("ok") is not True or not isinstance(result.get("session_id"), str):
+        if mutation:
+            client.unknown()
+        raise CliError("protocol", "Mika returned an invalid phone response.")
+    if args.action == "screenshot":
+        image = result.pop("image", None)
+        try:
+            if not isinstance(image, dict) or image.get("mime_type") != "image/png":
+                raise ValueError()
+            png = base64.b64decode(image["data"], validate=True)
+            if not png.startswith(b"\x89PNG\r\n\x1a\n"):
+                raise ValueError()
+        except (ValueError, KeyError, TypeError, binascii.Error):
+            raise CliError("protocol", "Mika returned an invalid PNG screenshot.") from None
+        output = Path(args.output).expanduser().absolute()
+        try:
+            with output.open("xb") as stream:
+                stream.write(png)
+        except OSError:
+            raise CliError("output", "Could not save screenshot; choose a new writable --output path.") from None
+        result["output"] = str(output)
+        result["bytes"] = len(png)
+    return result
 
 
 def bounded_int(low, high):
@@ -413,11 +462,12 @@ def parser():
         ("--url", "Phone HTTP origin or /api/v1 URL; bypasses ADB"),
         ("--token-file", "UTF-8 file containing the token for --url"),
         ("--adb", "ADB executable (default: adb)"),
+        ("--package", "Android application ID (default: com.wangzan101.mika; use com.wangzan101.mika.dev for the development build)"),
     ]:
         common.add_argument(flag, help=help_text, default=argparse.SUPPRESS)
     common.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Compact JSON output, including errors")
     common.add_argument("--request-timeout", type=request_timeout, default=argparse.SUPPRESS, help="HTTP timeout in seconds (default: 15; bounded waits get at least timeout + 5)")
-    p = Parser(prog="mika", description="Delegate tasks to Mika on Android using task API v1.", parents=[common])
+    p = Parser(prog="mika", description="Delegate tasks or directly control Mika's background phone display using API v1.", parents=[common])
     p.add_argument("--version", action="version", version="mika " + VERSION)
     sub = p.add_subparsers(dest="command", required=True)
     for name, help_text in [("connect", "Enable ADB computer access and verify task API"),
@@ -444,6 +494,32 @@ def parser():
             answer.add_argument("--text-file", help="UTF-8 file, or - for stdin")
     listing = actions.add_parser("list", parents=[common])
     listing.add_argument("--limit", type=bounded_int(1, 50), default=10)
+    phone = sub.add_parser("phone", help="Direct background phone control; no phone model required", parents=[common])
+    direct = phone.add_subparsers(dest="action", required=True)
+    direct.add_parser("open", parents=[common], help="Open one background display session (5-minute idle lease)")
+    for name in ["close", "apps", "launch", "read", "screenshot", "tap", "input", "scroll", "back"]:
+        command = direct.add_parser(name, parents=[common])
+        command.add_argument("session_id", help="Session ID returned by phone open")
+        if name == "apps":
+            command.add_argument("--query")
+        if name == "launch":
+            command.add_argument("package_name")
+        if name == "read":
+            command.add_argument("--max-elements", type=bounded_int(1, 2000), default=500)
+        if name == "screenshot":
+            command.add_argument("--output", required=True, help="New PNG file; existing files are not overwritten")
+        if name in {"tap", "input", "scroll"}:
+            command.add_argument("--snapshot-id", required=True, help="Latest snapshot ID from this session")
+            command.add_argument("--ref", help="Element ref from the latest screen")
+        if name == "tap":
+            command.add_argument("--x", type=bounded_int(0, 999))
+            command.add_argument("--y", type=bounded_int(0, 999))
+        if name == "input":
+            text = command.add_mutually_exclusive_group(required=True)
+            text.add_argument("--text")
+            text.add_argument("--text-file", help="UTF-8 file, or - for stdin")
+        if name == "scroll":
+            command.add_argument("--direction", choices=["up", "down"], required=True)
     return p
 
 
@@ -457,7 +533,7 @@ def main(argv=None):
     compact = "--json" in argv
     try:
         args = parser().parse_args(argv)
-        for key, default in {"device": None, "url": None, "token_file": None, "adb": "adb", "request_timeout": 15}.items():
+        for key, default in {"device": None, "url": None, "token_file": None, "adb": "adb", "request_timeout": 15, "package": "com.wangzan101.mika"}.items():
             if not hasattr(args, key):
                 setattr(args, key, default)
         if args.command == "ui":

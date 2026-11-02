@@ -4,6 +4,8 @@
 
 # Mika
 
+> **This fork adds model-free phone control over MCP and CLI.** The phone keeps Mika's background virtual display; the computer decides each action. See [direct phone control](docs/direct-phone-control.md) for setup. The original task-delegation mode below remains available.
+
 **An AI assistant on your phone: say what you need, and it works your apps and the web until it's done.**
 
 It works on a hidden background screen, so you can keep using your phone.

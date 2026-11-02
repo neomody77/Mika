@@ -1,5 +1,7 @@
 # 电脑端 CLI 与 Agent Skill
 
+> 本 Fork 增加 phone 子命令，可由电脑直接读屏、截图和操作后台虚拟屏，手机不需要配置模型。见[直接控制指南](direct-phone-control.md)。task 子命令仍使用手机模型。
+
 简体中文 | [English](cli.en.md)
 
 > 从电脑使用 Mika，先看[从电脑使用 Mika](computer.md)：怎么在 CLI + Skill 和 MCP 之间选、怎么连。
