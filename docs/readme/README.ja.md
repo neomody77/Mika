@@ -1,9 +1,11 @@
-<!-- translated-from: README.md @ 960f4051ce73 -->
+<!-- translated-from: README.md @ bdfa7cc599b6 -->
 <div align="center">
 
 <img src="../media/logo.png" alt="Mika" width="88" />
 
 # Mika
+
+> このフォークでは、MCP と CLI を通じて PC からスマートフォンを直接操作できます。バックグラウンドの仮想画面を維持し、スマートフォン側のモデル設定は不要です。[直接操作ガイド](../direct-phone-control.md)を参照してください。従来のタスク委任モードも利用できます。
 
 **スマホの中の AI アシスタント。ひと言伝えれば、アプリやウェブを操作して用事を片づけてくれます。**
 

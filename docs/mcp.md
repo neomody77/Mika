@@ -1,5 +1,7 @@
 # 电脑连接（MCP）：让电脑上的 AI 工具把任务交给 Mika
 
+> 本 Fork 也支持电脑逐步主控、手机不配置模型的直接控制模式：使用 mika_phone_ 前缀工具，见[直接控制指南](direct-phone-control.md)。下面的任务委托模式仍需要手机模型。
+
 简体中文 | [English](mcp.en.md)
 
 > 从电脑使用 Mika，先看[从电脑使用 Mika](computer.md)：怎么在 CLI + Skill 和 MCP 之间选、怎么连。想在终端或通过 Skill 使用，见 [CLI 与 Skill](cli.md)。

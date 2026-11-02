@@ -1,9 +1,11 @@
-<!-- translated-from: README.md @ 960f4051ce73 -->
+<!-- translated-from: README.md @ bdfa7cc599b6 -->
 <div align="center">
 
 <img src="../media/logo.png" alt="Mika" width="88" />
 
 # Mika
+
+> Este fork permite controlar el teléfono desde el ordenador mediante MCP y CLI, conservando la pantalla virtual en segundo plano y sin configurar un modelo en el teléfono. Consulta la [guía de control directo](../direct-phone-control.md). El modo original de delegación de tareas sigue disponible.
 
 **Un asistente de IA en tu móvil: dile lo que necesitas y usará tus apps y la web hasta dejarlo hecho.**
 

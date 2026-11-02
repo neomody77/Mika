@@ -31,7 +31,7 @@ class RemoteHost(
 
     val boundPort: Int get() = server?.port ?: -1
 
-    fun handle(req: HttpRequest): HttpResponse = access.handle(req, endpoints::handle)
+    fun handle(req: HttpRequest): HttpResponse = access.handle(req) { endpoints.handle(it) }
 
     /** 开始监听;端口被占等绑定失败时抛出异常。 */
     fun start() {

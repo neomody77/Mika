@@ -27,6 +27,7 @@ import java.util.Base64
 class McpRpc(
     private val tools: McpTaskTools,
     private val serverVersion: String,
+    private val phone: McpPhoneTools? = null,
     /** 每个过了门口、能读出来的请求:对方说自己是哪个客户端(没说时为空)。 */
     private val onRequest: (remote: java.net.InetAddress, clientName: String?) -> Unit = { _, _ -> },
 ) {
@@ -85,10 +86,10 @@ class McpRpc(
             "server/discover" -> buildJsonObject {
                 putJsonArray("supportedVersions") { (MODERN_VERSIONS + LEGACY_VERSIONS).forEach { add(it) } }
                 put("capabilities", capabilities())
-                put("instructions", INSTRUCTIONS)
+                put("instructions", instructions())
             }
             "ping" -> JsonObject(emptyMap())
-            "tools/list" -> buildJsonObject { put("tools", tools.definitions()) }
+            "tools/list" -> buildJsonObject { put("tools", definitions()) }
             "tools/call" -> when (val r = callTool(params)) {
                 is Call.Done -> r.result
                 is Call.Bad -> return error(400, id, INVALID_PARAMS, r.message)
@@ -119,11 +120,11 @@ class McpRpc(
                     put("protocolVersion", if (asked in LEGACY_VERSIONS) asked!! else LEGACY_VERSIONS.first())
                     put("capabilities", capabilities())
                     put("serverInfo", serverInfo())
-                    put("instructions", INSTRUCTIONS)
+                    put("instructions", instructions())
                 }
             }
             "ping" -> { onRequest(req.remote, null); JsonObject(emptyMap()) }
-            "tools/list" -> { onRequest(req.remote, null); buildJsonObject { put("tools", tools.definitions()) } }
+            "tools/list" -> { onRequest(req.remote, null); buildJsonObject { put("tools", definitions()) } }
             "tools/call" -> {
                 onRequest(req.remote, null)
                 when (val r = callTool(params)) {
@@ -144,13 +145,18 @@ class McpRpc(
     /** 工具名不认得、参数不是对象:协议错误。参数内容不对、任务找不到:工具执行出错(isError),交给对面的模型看着改。 */
     private fun callTool(params: JsonObject): Call {
         val name = (params["name"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return Call.Bad("params.name must be a string")
-        if (!tools.has(name)) return Call.Bad("Unknown tool: $name")
+        if (!tools.has(name) && phone?.has(name) != true) return Call.Bad("Unknown tool: $name")
         val args = when (val a = params["arguments"]) {
             null, JsonNull -> JsonObject(emptyMap())
             is JsonObject -> a
             else -> return Call.Bad("params.arguments must be an object")
         }
         val out = try {
+            if (phone?.has(name) == true) {
+                val result = runBlocking { phone.call(name, args) }
+                return Call.Done(toolResult(result.data.toString(), result.data,
+                    isError = (result.data["ok"] as? JsonPrimitive)?.contentOrNull == "false", png = result.png))
+            }
             runBlocking { tools.call(name, args) }
         } catch (e: McpTaskTools.ToolError) {
             return Call.Done(toolResult(e.message ?: "error", null, isError = true))
@@ -160,11 +166,18 @@ class McpRpc(
         return Call.Done(toolResult(out.toString(), out, isError = false))
     }
 
-    private fun toolResult(text: String, structured: JsonObject?, isError: Boolean) = buildJsonObject {
-        putJsonArray("content") { add(buildJsonObject { put("type", "text"); put("text", text) }) }
+    private fun toolResult(text: String, structured: JsonObject?, isError: Boolean, png: ByteArray? = null) = buildJsonObject {
+        putJsonArray("content") {
+            add(buildJsonObject { put("type", "text"); put("text", text) })
+            png?.let { add(buildJsonObject { put("type", "image"); put("mimeType", "image/png"); put("data", Base64.getEncoder().encodeToString(it)) }) }
+        }
         structured?.let { put("structuredContent", it) }
         put("isError", isError)
     }
+
+    private fun definitions() = JsonArray(tools.definitions() + phone?.definitions().orEmpty())
+    private fun instructions() = (if (phone != null) McpPhoneTools.INSTRUCTIONS +
+        "The separate mika_run_task delegation tools require a model configured on the phone. " else "") + INSTRUCTIONS
 
     private fun capabilities() = buildJsonObject { putJsonObject("tools") { put("listChanged", false) } }
     private fun serverInfo() = buildJsonObject { put("name", "mika"); put("title", "Mika"); put("version", serverVersion) }

@@ -20,6 +20,7 @@ class RemoteTaskApi(
     private val service: RemoteTaskService,
     private val serverVersion: String,
     private val device: DeviceAccess? = null,
+    private val phoneControl: Boolean = false,
 ) {
     fun handle(req: HttpRequest): HttpResponse = try {
         req.header("accept")?.lowercase()?.let {
@@ -46,7 +47,7 @@ class RemoteTaskApi(
             method(req, "GET")
             return ok(buildJsonObject {
                 put("api_version", 1); put("server_version", serverVersion)
-                putJsonArray("capabilities") { add("tasks"); add("task_steer"); if (device != null) add("device_state") }
+                putJsonArray("capabilities") { add("tasks"); add("task_steer"); if (device != null) add("device_state"); if (phoneControl) add("phone_control") }
                 putJsonObject("limits") {
                     put("max_wait_s", RemoteTaskService.MAX_WAIT_S)
                     put("max_goal", RemoteTaskService.MAX_GOAL)
